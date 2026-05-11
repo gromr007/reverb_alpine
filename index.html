@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALPINE Chat Frontend</title>
+    <!-- Пути для Vite -->
+    <script type="module" src="resources/js/app.js"></script>
+    <link rel="stylesheet" href="resources/css/app.css">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen py-8">
+
+<div x-data="chat" class="chat w-full px-6">
+    
+    <!-- Шапка -->
+    <header class="bg-white rounded-2xl shadow-lg p-6 mb-8">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+            <div class="flex items-center space-x-4">
+                <img src="favicon.svg" class="h-10 w-auto hover:scale-110 transition-transform" alt="Alpine logo" />
+                <div>
+                    <h1 class="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-emerald-600 bg-clip-text text-transparent">
+                        Alpine.js Chat + Laravel Echo
+                    </h1>
+                    <p class="text-gray-600">Реальное время с WebSocket соединением (Standalone)</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Строка: Статистика (30%) + Настройки окружения (70%) -->
+    <div class="flex flex-col md:flex-row gap-8 mb-8 w-full">
+        
+        <!-- Левая колонка - Статистика (30%) -->
+        <div class="w-full md:w-[30%] shrink-0 bg-white rounded-2xl shadow-lg p-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">📊 Статистика</h2>
+            <div class="space-y-4">
+                <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-600">ID пользователя:</span>
+                    <span class="font-bold text-blue-600" x-text="authUserId || '—'"></span>
+                </div>
+                <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-600">ID комнаты:</span>
+                    <span class="font-bold text-purple-600" x-text="chatRoomId || '—'"></span>
+                </div>
+                <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-600">Сообщений:</span>
+                    <span class="font-bold text-green-600" x-text="messages.length"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Правая колонка - Настройки окружения (70%) -->
+        <div class="w-full md:w-[70%] bg-white rounded-2xl shadow-lg p-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">🔧 Настройки окружения</h2>
+            <div class="space-y-3 text-sm font-mono bg-gray-50 p-4 rounded-lg">
+                <div class="flex justify-between border-b pb-2">
+                    <span class="text-gray-600">VITE_API_URL:</span>
+                    <!-- Исправлено: убрали env. -->
+                    <span class="font-bold" x-text="envApiUrl"></span>
+                </div>
+                <div class="flex justify-between border-b pb-2">
+                    <span class="text-gray-600">VITE_WS_HOST:</span>
+                    <!-- Исправлено: убрали env. -->
+                    <span class="font-bold" x-text="envWsHost"></span>
+                </div>
+                <div class="flex justify-between border-b pb-2">
+                    <span class="text-gray-600">VITE_WS_PORT:</span>
+                    <!-- Исправлено: убрали env. -->
+                    <span class="font-bold" x-text="envWsPort"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Токен:</span>
+                    <!-- Исправлено: убрали env. из условий -->
+                    <span class="font-bold" 
+                          :class="envHasToken ? 'text-green-600' : 'text-red-600'"
+                          x-text="envHasToken ? 'Установлен' : 'Отсутствует'">
+                    </span>
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+
+    <!-- Чат (на всю ширину ниже) -->
+    <div class="bg-white p-6 shadow-lg rounded-2xl w-full">
+        <h2 class="text-2xl font-bold mb-6 text-gray-800">💬 Чат проекта</h2>
+        
+        <!-- Спиннер загрузки истории -->
+        <div x-show="isLoading" class="text-center p-12">
+            <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+            <p class="text-gray-600">Загрузка чата...</p>
+        </div>
+
+        <!-- Окно сообщений -->
+        <div x-show="!isLoading" class="overflow-y-auto h-96 pr-2 mb-6">
+            <template x-for="(msgs, date) in groupedMessages" :key="date">
+                <div>
+                    <!-- Разделитель даты -->
+                    <div class="text-center my-4 text-xs text-gray-400 font-medium" x-text="date"></div>
+
+                    <template x-for="msg in msgs" :key="msg.id">
+                        <div class="mb-4 flex" :class="Number(msg.from?.id) === Number(authUserId) ? 'justify-end' : 'justify-start'">
+                            <div class="max-w-[80%] p-3 rounded-xl shadow-sm border border-gray-100"
+                                 :class="Number(msg.from?.id) === Number(authUserId) ? 'bg-indigo-50 text-indigo-900 border-indigo-100' : 'bg-gray-50 text-gray-900'">
+                                <div class="text-[10px] font-bold opacity-75 mb-1" x-text="msg.from?.name"></div>
+                                <div class="text-sm" x-text="msg.text"></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </div>
+
+        <!-- Форма отправки -->
+        <div x-show="!isLoading" class="flex flex-col gap-3">
+            <input x-model="messageInput"
+                   class="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-400 outline-none transition-all shadow-inner"
+                   placeholder="Введите текст сообщения...">
+
+            <div class="flex flex-col sm:flex-row gap-3">
+                <!-- Кнопка AXIOS -->
+                <button @click="sendMessageAxios"
+                        class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-xl shadow-md hover:shadow-lg transition-all">
+                    Отправить через API (Axios)
+                </button>
+            </div>
+        </div>
+
+        <!-- Легенда под чатом -->
+        <div x-show="!isLoading" class="mt-4 text-xs text-gray-400 flex gap-4 font-medium">
+            <span>🔵 Синий — через сервер</span>
+            <!-- <span>🟢 Зеленый — напрямую клиент-клиент</span> -->
+        </div>
+    </div>
+
+    <!-- Футер -->
+    <footer class="mt-12 pt-8 border-t border-gray-200 text-center text-gray-500 text-sm">
+        <p>Alpine.js Chat + Laravel Echo Demo • Реальное время с WebSocket</p>
+        <p class="mt-2">
+            <a href="laravel.com" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline">
+                Laravel Broadcasting Docs
+            </a>
+            {' • '}
+            <a href="github.com" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline">
+                Laravel Echo GitHub
+            </a>
+        </p>
+    </footer>
+
+</div>
+
+</body>
+</html>

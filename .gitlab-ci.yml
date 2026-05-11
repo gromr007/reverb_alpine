@@ -1,0 +1,87 @@
+# Добавляем глобальную переменную, чтобы GitLab скачивал репозиторий полностью
+variables:
+  GIT_DEPTH: "0"
+
+stages:
+  - sync
+  - build
+  - deploy
+
+# 1. ЭТАП: Синхронизация кода на GitHub (Один коммит "code")
+sync_to_github:
+  stage: sync
+  image: bitnami/git:latest
+  script:
+  
+    # Полностью удаляем старую историю коммитов текущего раннера
+    - rm -rf .git
+    
+    # Инициализируем чистый Git-репозиторий с нуля
+    - git init
+    - git config --global user.email "gitlab-ci@pet-project.online"
+    - git config --global user.name "GitLab CI"
+    
+    # Индексируем файлы и создаем ОДИН единственный коммит "code"
+    - git add .
+    - git commit -m "code"
+    - git branch -M master
+
+    # --- ЛОГИРОВАНИЕ ПЕРЕМЕННОЙ ---
+    - echo "=== ОТЛАДКА ПЕРЕМЕННОЙ GH_TOKEN ==="
+    - echo "1. Длина токена из настроек GitLab:${#GH_TOKEN} символов."
+    
+    # Очищаем токен от возможных спецсимволов Windows/Linux
+    - CLEAN_TOKEN=$(echo -n "$GH_TOKEN" | tr -d '\r' | tr -d '\n' | xargs)
+    - echo "2. Длина токена после очистки:${#CLEAN_TOKEN} символов."
+    
+    # Безопасно выводим префикс токена (должно быть ghp_ или github_pat_)
+    - PREFIX=$(echo -n "$CLEAN_TOKEN" | cut -c 1-4)
+    - echo "3. Первые 4 символа токена:${PREFIX}"
+    
+    # --- ЛОГИРОВАНИЕ КОМАНД GIT ---
+    - echo "=== ОТЛАДКА РАБОТЫ С GIT ==="
+    # Пробуем добавить удаленный репозиторий через очищенный токен
+    - git remote add github "https://oauth2:${CLEAN_TOKEN}@github.com/gromr007/reverb_alpine.git"
+    
+    # Выводим то, что Git реально записал в свои настройки (скрывая сам токен)
+    - echo "4. Текущие удаленные репозитории в Git:"
+    - git remote -v
+    
+    # Пробуем отправить код
+    - echo "5. Запуск команды git push..."
+    - git push --force github master
+    
+  only:
+    - master
+
+# 2. ЭТАП: Сборка React приложения в статику
+build_application:
+  stage: build
+  image: node:20-alpine
+  script:
+    - echo "$PROD_ENV" > .env
+    - npm ci
+    - npm run build
+  artifacts:
+    name: "alpine-build-$CI_COMMIT_REF_NAME"
+    expire_in: 1 week
+    paths:
+      - dist/
+  only:
+    - master
+    
+# 3. ЭТАП: Деплой статики на VDS через rsync
+deploy_to_vds:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - apk add --no-cache openssh-client rsync
+    # Исправление: Гарантируем перенос строки в конце ключа, чтобы libcrypto не ругался
+    - sed -i '$a\' $VDS_SSH_PRIVATE_KEY
+    # Задаем безопасные права доступа для ключа
+    - chmod 400 $VDS_SSH_PRIVATE_KEY
+    # Заливаем скомпилированные файлы на сервер
+    - rsync -atv --delete -e "ssh -i $VDS_SSH_PRIVATE_KEY -o StrictHostKeyChecking=no" dist/ root@$VDS_HOST:/home/projects/compose/static/reverb_alpine/
+  only:
+    - master
+
